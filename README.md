@@ -2,6 +2,8 @@
 
 ---
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/eb995523f5874cce9e288693c0e16ef4)](https://app.codacy.com/gh/v-49/-Tinker?utm_source=github.com&utm_medium=referral&utm_content=v-49/-Tinker&utm_campaign=Badge_Grade)
+
 # Tinker 🚀 (Python 3.9)
 
 ### 简介 / Introduction

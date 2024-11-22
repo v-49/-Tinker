@@ -95,7 +95,7 @@ def classify_and_count_jobs_by_level(db, jobs, current_time, ignored_jobs):
         has_active_checks = any(check.check_time > current_time for check in checks)
 
         if job.time >= current_time or has_active_checks:
-            job_data = build_job_with_checks(job, checks)
+            job_data = build_job_with_checks(job, checks, current_time)
             job_level = job.level if job.level else "其他"  # 默认分类为 "其他"（无法归类的任务）
 
             # 分类统计任务数量
@@ -113,21 +113,25 @@ def classify_and_count_jobs_by_level(db, jobs, current_time, ignored_jobs):
         "jobs": jobs_data  # 所有任务的详细信息
     }
 
-def build_job_with_checks(job, checks):
+def build_job_with_checks(job, checks, current_time):
     """
-    构建任务及其对应的检查项信息
+    构建任务及其对应的检查项信息，并增加倒计时字段
     """
-    checks_data = [
-        {
+    checks_data = []
+    for check in checks:
+        # 计算倒计时（check_time - 当前时间）
+        countdown = None
+        if check.check_time:
+            countdown = int((check.check_time - current_time).total_seconds())
+
+        checks_data.append({
             "check_id": check.id,
             "check_name": check.name,
             "check_number": check.number,
             "check_time": check.check_time.strftime("%Y-%m-%d %H:%M:%S") if check.check_time else None,
-            "countdown": check.countdown,
+            "countdown": countdown,  # 计算倒计时（秒）
             "check_group": check.check_group
-        }
-        for check in checks
-    ]
+        })
 
     return {
         "job_id": job.id,

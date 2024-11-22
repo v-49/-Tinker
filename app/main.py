@@ -5,7 +5,7 @@ from app.active import router as active_router
 from app.passive import router as passive_router
 from app.lifespan import lifespan
 from app.ws_routes import ws_router
-
+from app.delay import router as delay_router
 
 app = FastAPI(lifespan=lifespan)
 #防止跨域处理
@@ -19,3 +19,4 @@ app.add_middleware(
 app.include_router(ws_router)
 app.include_router(active_router)
 app.include_router(passive_router)
+app.include_router(delay_router)

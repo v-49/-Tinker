@@ -29,6 +29,7 @@ async def delay_check(check_id: int, pushtime: str):
                 Check.job_id == job_id,
                 Check.check_time >= check.check_time,
                 #Check.status == 0 包括已推送进行延迟
+                Check.check_group == "流程节点管控"
             ).all()
             if not subsequent_checks:
                 raise HTTPException(status_code=400, detail="没有找到后续未推送的检查项")
@@ -39,7 +40,7 @@ async def delay_check(check_id: int, pushtime: str):
                 subsequent_check.status = 0
             db.commit()
             logger.info(
-                f"延迟任务ID {job_id} 的检查项 {', '.join([str(c.id) for c in subsequent_checks])} "
+                f"延迟任务ID {job_id} 的“流程节点管控”检查项 {', '.join([str(c.id) for c in subsequent_checks])} "
                 f"{delay_minutes} 分钟 {delay_seconds} 秒"
             )
             # 更新队列中的检查项

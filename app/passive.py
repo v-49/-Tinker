@@ -4,7 +4,7 @@ from app.database import SessionLocal
 from datetime import datetime, timedelta
 import logging
 from collections import defaultdict
-
+from app.utils import process_countdown
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -111,6 +111,7 @@ def classify_and_count_jobs_by_level(db, jobs, current_time, ignored_jobs):
 
     # 将任务按级别分类，放入返回的响应中
     for level in level_count:
+        # 对每个级别下的任务按检查项的分组排序
         for job_data in level_jobs[level]:
             jobs_data.append(job_data)
 
@@ -125,23 +126,39 @@ def build_job_with_checks(job, checks, current_time):
     """
     构建任务及其对应的检查项信息，并增加倒计时字段
     """
-    checks_data = []
-    for check in checks:
-        # 计算倒计时（check_time - 当前时间）
-        countdown = None
-        if check.check_time:
-            countdown = int((check.check_time - current_time).total_seconds())
-            if countdown < 0:
-                countdown = -1
+    # 对检查项进行分组，先按 check_group 再按 check_time 排序
+    grouped_checks = defaultdict(list)
 
-        checks_data.append({
-            "check_id": check.id,
-            "check_name": check.name,
-            "check_number": check.number,
-            "check_time": check.check_time.strftime("%Y-%m-%d %H:%M:%S") if check.check_time else None,
-            "countdown": countdown,  # 计算倒计时（秒）
-            "check_group": check.check_group
-        })
+    # 遍历检查项并进行分组
+    for check_obj in checks:  # 使用 `check_obj` 作为内部变量名
+        grouped_checks[check_obj.check_group].append(check_obj)
+
+    # 对每个组内的检查项按时间排序
+    for group in grouped_checks:
+        # 对每个分组内的检查项按时间排序
+        grouped_checks[group] = sorted(grouped_checks[group], key=lambda check: check.check_time)  # `check` 改为 `check`
+
+    checks_data = []
+    # 遍历每个分组及其对应的检查项
+    for group, group_checks in grouped_checks.items():
+        for check_obj in group_checks:  # 使用 `check_obj` 作为变量名
+            push_time = check_obj.check_time - process_countdown(check_obj.countdown)
+            if push_time <= current_time:
+                # 计算倒计时
+                countdown = int((check_obj.check_time - current_time).total_seconds())
+                if countdown < 0:
+                    countdown = -1
+            else:
+                # 推送时间还没到，倒计时不变
+                countdown = process_countdown(check_obj.countdown).total_seconds()
+            checks_data.append({
+                "check_id": check_obj.id,
+                "check_name": check_obj.name,
+                "check_number": check_obj.number,
+                "check_time": check_obj.check_time.strftime("%Y-%m-%d %H:%M:%S") if check_obj.check_time else None,
+                "countdown": countdown,  # 计算倒计时（秒）
+                "check_group": group  # 检查项的分组名称
+            })
 
     return {
         "job_id": job.id,

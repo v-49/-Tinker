@@ -9,6 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 @router.get("/api/v1/jobs/active")
 async def get_jobs_with_checks():
     db = SessionLocal()
@@ -44,6 +45,7 @@ async def get_jobs_with_checks():
         db.close()
         logger.info("数据库连接已关闭。")
 
+
 def get_valid_checks(db, current_time):
     """
     获取符合条件的检查项（前期倒排和流程节点管控）
@@ -59,8 +61,12 @@ def get_valid_checks(db, current_time):
         Check.status == 0,
         Check.check_group == "流程节点管控"
     ).all()
+    checks_pending = db.query(Check).filter(
+        Check.status == 1,  # 已推送，但未完成
+        Check.check_time > current_time
+    ).all()
+    return checks_early + checks_flow_control+checks_pending
 
-    return checks_early + checks_flow_control
 
 def get_jobs_by_checks(db, valid_checks):
     """
@@ -76,6 +82,7 @@ def get_jobs_by_checks(db, valid_checks):
     ).all()
 
     return jobs
+
 
 def classify_and_count_jobs_by_level(db, jobs, current_time, ignored_jobs):
     """
@@ -113,6 +120,7 @@ def classify_and_count_jobs_by_level(db, jobs, current_time, ignored_jobs):
         "jobs": jobs_data  # 所有任务的详细信息
     }
 
+
 def build_job_with_checks(job, checks, current_time):
     """
     构建任务及其对应的检查项信息，并增加倒计时字段
@@ -123,6 +131,8 @@ def build_job_with_checks(job, checks, current_time):
         countdown = None
         if check.check_time:
             countdown = int((check.check_time - current_time).total_seconds())
+            if countdown < 0:
+                countdown = -1
 
         checks_data.append({
             "check_id": check.id,

@@ -1,10 +1,10 @@
-# app/active.py
+# active.py
 from fastapi import APIRouter
 from app.models import Check, Job
 from app.database import SessionLocal
 from datetime import datetime
 import logging
-from app.utils import process_countdown
+from app.utils import process_countdown, calculate_pushtime
 from app.ws_routes import manager
 import asyncio
 import traceback
@@ -12,6 +12,8 @@ from app.find import task_queue, task_queue_updated
 from app.passive import build_job_with_checks
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
 async def push_tasks():
     current_task = None
     while True:
@@ -57,6 +59,8 @@ async def push_tasks():
             logger.error(f"推送任务时出错: {e}")
             logger.error(f"错误堆栈: {traceback.format_exc()}")
             await asyncio.sleep(5)
+
+
 # 处理单个检查项的逻辑，判断是否满足推送条件然后推送后状态置1
 async def process_check(check_id):
     with SessionLocal() as db:
@@ -74,9 +78,26 @@ async def process_check(check_id):
             db.commit()
             logger.info(f"任务 {job.id} 已完成，检查项 {check.id} 状态更新为已完成。")
             return
-        countdown_delta = process_countdown(check.countdown)
-        push_time = check.check_time - countdown_delta
-        if push_time > current_time:
+
+        # 确定推送时间
+        if check.new_pushtime:
+            push_time = check.new_pushtime
+            logger.info(f"检查项 {check.id} 使用 new_pushtime 作为推送时间：{push_time}")
+
+        else:
+
+            push_time = check.pushtime
+
+        if not push_time:
+            # 如果pushtime不存在，计算并保存
+            push_time = calculate_pushtime(check)
+            check.pushtime = push_time
+            db.commit()
+            logger.info(f"检查项 {check.id} 计算并初始化 pushtime：{push_time}")
+
+
+
+        if push_time > datetime.now():
 
             logger.warning(f"检查项 {check.id} 的推送时间未到，当前时间：{current_time}，推送时间：{push_time}")
             return
@@ -88,17 +109,17 @@ async def process_check(check_id):
 
         # 将当前检查项添加到已推送的列表中
         pushed_checks.append(check)
-        await push_checks_with_job(job, pushed_checks, current_time)
+        await push_checks_with_job(db, job, pushed_checks, current_time)
         check.status = 1
         db.commit()
         logger.info(f" {check.id} pushed。")
 
+
 # 推送检查项的消息
-async def push_checks_with_job(job, checks, current_time):
+async def push_checks_with_job(db, job, checks, current_time):
     try:
-        message = build_job_with_checks(job, checks, current_time)
+        message = build_job_with_checks(db, job, checks, current_time)
         await manager.broadcast(message)
         logger.info(f"推送任务 {job.id} 和检查项 {', '.join(str(check.id) for check in checks)}。")
     except Exception as e:
         logger.error(f"推送任务和检查项时出错：{e}")
-# 构建推送消息

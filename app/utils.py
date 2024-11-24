@@ -7,6 +7,7 @@ import asyncio
 import heapq
 logger = logging.getLogger(__name__)
 
+
 def process_countdown(countdown_str):
     try:
         parts = countdown_str.split(':')
@@ -21,6 +22,19 @@ def process_countdown(countdown_str):
         logger.error(f"处理countdown出错：{e}")
         return timedelta()
 
+
+def calculate_pushtime(check):
+    logger.info(f"检查项 {check.id} 的倒计时原始值：{check.countdown}")
+    countdown_delta = process_countdown(check.countdown)
+    effective_check_time = check.new_check_time or check.check_time
+    logger.info(f"有效的检查时间为：{effective_check_time}")
+    logger.info(f"解析后的倒计时为：{countdown_delta}")
+    pushtime = effective_check_time - countdown_delta
+    check.pushtime = pushtime
+    logger.info(f"计算得到的推送时间为：{pushtime}")
+    return pushtime
+
+
 def mark_check_as_pushed(check: Check):
     db = SessionLocal()
     try:
@@ -33,15 +47,18 @@ def mark_check_as_pushed(check: Check):
     finally:
         db.close()
 
+
 class AsyncPriorityQueue:
             def __init__(self):
                 self._queue = []
                 self._event = asyncio.Event()
                 self._lock = asyncio.Lock()
+
             async def put(self, item):
                 async with self._lock:
                     heapq.heappush(self._queue, item)
                     self._event.set()
+
             async def get(self):
                 while True:
                     async with self._lock:
@@ -50,12 +67,15 @@ class AsyncPriorityQueue:
                         else:
                             self._event.clear()
                     await self._event.wait()
+
             def peek(self):
                 if self._queue:
                     return self._queue[0]
                 else:
                     return None
+
             def empty(self):
                 return len(self._queue) == 0
+
             def contains(self, check_id):
                 return any(item[1] == check_id for item in self._queue)

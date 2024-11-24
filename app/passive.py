@@ -1,10 +1,12 @@
+# passive.py
 from fastapi import APIRouter
 from app.models import Job, Check
 from app.database import SessionLocal
 from datetime import datetime, timedelta
 import logging
 from collections import defaultdict
-from app.utils import process_countdown
+from app.utils import process_countdown, calculate_pushtime
+from sqlalchemy.sql import func
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,21 +53,21 @@ def get_valid_checks(db, current_time):
     获取符合条件的检查项（前期倒排和流程节点管控）
     """
     checks_early = db.query(Check).filter(
-        Check.check_time >= current_time - timedelta(hours=73),
+        func.coalesce(Check.new_check_time, Check.check_time) >= current_time - timedelta(hours=73),
         Check.status == 0,
         Check.check_group == "前期倒排"
     ).all()
 
     checks_flow_control = db.query(Check).filter(
-        Check.check_time >= current_time,
+        func.coalesce(Check.new_check_time or Check.check_time) >= current_time,
         Check.status == 0,
         Check.check_group == "流程节点管控"
     ).all()
     checks_pending = db.query(Check).filter(
         Check.status == 1,  # 已推送，但未完成
-        Check.check_time > current_time
+        func.coalesce(Check.new_check_time or Check.check_time) > current_time
     ).all()
-    return checks_early + checks_flow_control+checks_pending
+    return checks_early + checks_flow_control + checks_pending
 
 
 def get_jobs_by_checks(db, valid_checks):
@@ -99,10 +101,12 @@ def classify_and_count_jobs_by_level(db, jobs, current_time, ignored_jobs):
 
         # 获取该任务的检查项
         checks = db.query(Check).filter(Check.job_id == job.id).order_by(Check.check_time).all()
-        has_active_checks = any(check.check_time > current_time for check in checks)
+        has_active_checks = any(
+            (check.new_check_time or check.check_time) > current_time for check in checks
+        )
 
         if job.time >= current_time or has_active_checks:
-            job_data = build_job_with_checks(job, checks, current_time)
+            job_data = build_job_with_checks(db, job, checks, current_time)
             job_level = job.level if job.level else "其他"  # 默认分类为 "其他"（无法归类的任务）
 
             # 分类统计任务数量
@@ -122,7 +126,7 @@ def classify_and_count_jobs_by_level(db, jobs, current_time, ignored_jobs):
     }
 
 
-def build_job_with_checks(job, checks, current_time):
+def build_job_with_checks(db, job, checks, current_time):
     """
     构建任务及其对应的检查项信息，并增加倒计时字段
     """
@@ -135,14 +139,26 @@ def build_job_with_checks(job, checks, current_time):
 
     # 对每个组内的检查项按时间排序
     for group in grouped_checks:
-        # 对每个分组内的检查项按时间排序
-        grouped_checks[group] = sorted(grouped_checks[group], key=lambda check: check.check_time)  # `check` 改为 `check`
-
+        grouped_checks[group] = sorted(
+            grouped_checks[group],
+            key=lambda check: check.new_check_time or check.check_time
+        )
     checks_data = []
     # 遍历每个分组及其对应的检查项
     for group, group_checks in grouped_checks.items():
         for check_obj in group_checks:  # 使用 `check_obj` 作为变量名
-            push_time = check_obj.check_time - process_countdown(check_obj.countdown)
+            effective_check_time = check_obj.new_check_time or check_obj.check_time
+            if check_obj.new_pushtime:
+                push_time = check_obj.new_pushtime
+                logger.info(f"检查项 {check_obj.id} 使用 new_pushtime 作为推送时间：{push_time}")
+
+            else:
+                # 计算并初始化 pushtime
+                push_time = calculate_pushtime(check_obj)
+                db.commit()
+
+                logger.info(f"检查项 {check_obj.id} 计算并初始化 pushtime：{push_time}")
+
             if push_time <= current_time:
                 # 计算倒计时
                 countdown = int((check_obj.check_time - current_time).total_seconds())
@@ -155,9 +171,15 @@ def build_job_with_checks(job, checks, current_time):
                 "check_id": check_obj.id,
                 "check_name": check_obj.name,
                 "check_number": check_obj.number,
-                "check_time": check_obj.check_time.strftime("%Y-%m-%d %H:%M:%S") if check_obj.check_time else None,
+                "check_time": effective_check_time.strftime("%Y-%m-%d %H:%M:%S") if effective_check_time else None,
                 "countdown": countdown,  # 计算倒计时（秒）
-                "check_group": group  # 检查项的分组名称
+                "pushtime": push_time.strftime("%Y-%m-%d %H:%M:%S") if push_time else None,
+                "check_group": group,
+                "new_check_time": check_obj.new_check_time.strftime(
+                    "%Y-%m-%d %H:%M:%S") if check_obj.new_check_time else None,
+                "new_pushtime": check_obj.new_pushtime.strftime(
+                    "%Y-%m-%d %H:%M:%S") if check_obj.new_pushtime else None,
+                "status": check_obj.status,
             })
 
     return {

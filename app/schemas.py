@@ -1,3 +1,4 @@
+# app/schemas.py
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
@@ -17,5 +18,8 @@ class CheckSchema(BaseModel):
     countdown: Optional[str]
     status: Optional[int]
     check_group:Optional[str]
+    new_check_time: Optional[datetime]
+    pushtime: Optional[datetime]
+    new_pushtime: Optional[datetime]
     class Config:
         orm_mode = True

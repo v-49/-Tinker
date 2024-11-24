@@ -1,3 +1,4 @@
+# models.py
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -24,5 +25,8 @@ class Check(Base):
     job_id = Column(Integer, ForeignKey('job.id'), nullable=False)
     execution = Column(String(256), nullable=False)
     status = Column(Integer, nullable=False, default=0)
+    new_check_time = Column(DateTime, nullable=True)
+    pushtime = Column(DateTime, nullable=True)
+    new_pushtime = Column(DateTime, nullable=True)
 
     job = relationship("Job", back_populates="checks")

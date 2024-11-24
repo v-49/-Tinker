@@ -1,15 +1,16 @@
-# app/find.py
+# find.py
 from app.models import Job, Check
 from app.database import SessionLocal
 from datetime import datetime, timedelta
 import logging
 import asyncio
-from app.utils import process_countdown
-from app.utils import AsyncPriorityQueue
+from app.utils import process_countdown, AsyncPriorityQueue, calculate_pushtime
+
 
 logger = logging.getLogger(__name__)
 task_queue = AsyncPriorityQueue()
 task_queue_updated = asyncio.Event()
+
 
 async def discover_tasks():
     try:
@@ -39,11 +40,20 @@ async def discover_tasks():
                     db.commit()
                     logger.info(f"任务 {job.id} 已完成，检查项 {check.id} 状态更新为已完成。")
                     continue
-                countdown_delta = process_countdown(check.countdown)
-                push_time = check.check_time - countdown_delta
+
+                if check.new_pushtime:
+                    push_time = check.new_pushtime
+                    logger.info(f"检查项 {check.id} 使用 new_pushtime 作为推送时间：{push_time}")
+
+                else:
+                    push_time = calculate_pushtime(check)
+                    db.commit()
+
+                    logger.info(f"1检查项 {check.id} 计算并初始化 pushtime：{push_time}")
+
                 if push_time < current_time:
                     logger.info(f"检查项 {check.id} 的推送时间已过，立即推送。")
-                    push_time = current_time
+
                 priority = push_time.timestamp()
                 if not task_queue.contains(check.id):
                     await task_queue.put((priority, check.id))

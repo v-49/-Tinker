@@ -49,7 +49,6 @@ async def discover_tasks():
                     push_time = calculate_pushtime(check)
                     db.commit()
 
-                    logger.info(f"1检查项 {check.id} 计算并初始化 pushtime：{push_time}")
 
                 if push_time < current_time:
                     logger.info(f"检查项 {check.id} 的推送时间已过，立即推送。")

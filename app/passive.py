@@ -34,7 +34,7 @@ async def get_jobs_with_checks():
         return {
             "level_counts": response["level_counts"],
             "jobs": response["jobs"],
-            "ignored_jobs": ignored_jobs  # 将忽略的任务ID返回
+            "ignored_jobs": ignored_jobs
         }
 
     except Exception as e:
@@ -45,7 +45,7 @@ async def get_jobs_with_checks():
         }
     finally:
         db.close()
-        logger.info("数据库连接已关闭。")
+        logger.info("查询完成。")
 
 
 def get_valid_checks(db, current_time):
@@ -153,7 +153,7 @@ def build_job_with_checks(db, job, checks, current_time):
                 push_time = calculate_pushtime(check_obj)
                 db.commit()
 
-                logger.info(f"检查项 {check_obj.id} 计算并初始化 pushtime：{push_time}")
+                logger.info(f"检查项 {check_obj.id} 计算 pushtime：{push_time}")
 
             if push_time <= current_time:
                 # 计算倒计时

@@ -19,13 +19,13 @@ async def delay_check(check_id: int, pushtime: str):
         with SessionLocal() as db:
             check = db.query(Check).filter(Check.id == check_id).first()
             if not check:
-                raise HTTPException(status_code=404, detail="检查项不存在")
+                raise HTTPException(status_code=400, detail="检查项不存在")
 
             # 使用 new_check_time（如果存在）或 check_time 作为基准时间
             base_time = check.new_check_time or check.check_time
             delay_duration = pushtime - base_time
             if delay_duration.total_seconds() <= 0:
-                raise HTTPException(status_code=400, detail="传入的 pushtime 必须晚于当前的检查项时间")
+                raise HTTPException(status_code=401, detail="传入的 pushtime 必须晚于当前的检查项时间")
 
             total_seconds = delay_duration.total_seconds()
             delay_minutes = int(total_seconds // 60)
@@ -38,7 +38,7 @@ async def delay_check(check_id: int, pushtime: str):
                 Check.check_group == "流程节点管控"
             ).all()
             if not subsequent_checks:
-                raise HTTPException(status_code=400, detail="没有找到后续未推送的检查项")
+                raise HTTPException(status_code=402, detail="没有找到后续未推送的检查项")
 
             def get_check_time(cc):
                 return cc.new_check_time or cc.check_time or datetime.min
@@ -49,7 +49,7 @@ async def delay_check(check_id: int, pushtime: str):
                     current_index = idx
                     break
             if current_index is None:
-                raise HTTPException(status_code=400, detail="未能找到当前的检查项")
+                raise HTTPException(status_code=403, detail="未能找到当前的检查项")
             subsequent_checks = subsequent_checks[current_index:]
 
             # 应用延迟到后续检查项

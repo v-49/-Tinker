@@ -4,7 +4,7 @@ from app.database import SessionLocal
 from datetime import datetime, timedelta
 import logging
 import asyncio
-from app.utils import process_countdown, AsyncPriorityQueue, calculate_pushtime
+from app.utils import  AsyncPriorityQueue, calculate_pushtime
 
 
 logger = logging.getLogger(__name__)

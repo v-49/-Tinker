@@ -53,21 +53,17 @@ def get_valid_checks(db, current_time):
     获取符合条件的检查项（前期倒排和流程节点管控）
     """
     checks_early = db.query(Check).filter(
-        func.coalesce(Check.new_check_time, Check.check_time) >= current_time - timedelta(hours=73),
-        Check.status == 0,
+        func.coalesce(Check.new_check_time, Check.check_time) <= current_time + timedelta(hours=73),
+        func.coalesce(Check.new_check_time, Check.check_time) >= current_time,
         Check.check_group == "前期倒排"
     ).all()
 
     checks_flow_control = db.query(Check).filter(
-        func.coalesce(Check.new_check_time or Check.check_time) >= current_time,
-        Check.status == 0,
+        func.coalesce(Check.new_check_time, Check.check_time) >= current_time,
         Check.check_group == "流程节点管控"
     ).all()
-    checks_pending = db.query(Check).filter(
-        Check.status == 1,  # 已推送，但未完成
-        func.coalesce(Check.new_check_time or Check.check_time) > current_time
-    ).all()
-    return checks_early + checks_flow_control + checks_pending
+
+    return checks_early + checks_flow_control
 
 
 def get_jobs_by_checks(db, valid_checks):

@@ -4,7 +4,7 @@ from app.models import Check, Job
 from app.database import SessionLocal
 from datetime import datetime
 import logging
-from app.utils import process_countdown, calculate_pushtime
+from app.utils import  calculate_pushtime
 from app.ws_routes import manager
 import asyncio
 import traceback
@@ -94,7 +94,6 @@ async def process_check(check_id):
             check.pushtime = push_time
             db.commit()
             logger.info(f"检查项 {check.id} 计算并初始化 pushtime：{push_time}")
-
 
 
         if push_time > datetime.now():

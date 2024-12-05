@@ -10,6 +10,7 @@ import asyncio
 import traceback
 from app.find import task_queue, task_queue_updated
 from app.passive import build_job_with_checks
+from sqlalchemy.sql import func
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -68,7 +69,7 @@ async def process_check(check_id):
         if not check:
             logger.warning(f"检查项 {check_id} 不存在，跳过。")
             return
-        current_time = datetime.now()
+        current_time = datetime.now().replace(microsecond=0)
         job = db.query(Job).filter(Job.id == check.job_id).first()
         if not job:
             logger.warning(f"检查项 {check.id} 对应的任务不存在，跳过。")
@@ -104,10 +105,11 @@ async def process_check(check_id):
             logger.info(f"检查项 {check.id} 状态已更新为 {check.status}，不再推送")
             return
         logger.info(f"gonna push {check.id} ")
-        pushed_checks = db.query(Check).filter(Check.job_id == job.id, Check.status == 1).all()
+        pushed_checks = db.query(Check).filter(
+            Check.job_id == job.id,
+            func.coalesce(Check.new_pushtime, Check.pushtime) <= current_time
+        ).all()
 
-        # 将当前检查项添加到已推送的列表中
-        pushed_checks.append(check)
         await push_checks_with_job(db, job, pushed_checks, current_time)
         check.status = 1
         db.commit()

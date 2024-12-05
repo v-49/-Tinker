@@ -24,14 +24,10 @@ def process_countdown(countdown_str):
 
 
 def calculate_pushtime(check):
-    logger.info(f"检查项 {check.id} 的倒计时原始值：{check.countdown}")
     countdown_delta = process_countdown(check.countdown)
     effective_check_time = check.new_check_time or check.check_time
-    logger.info(f"有效的检查时间为：{effective_check_time}")
-    logger.info(f"解析后的倒计时为：{countdown_delta}")
     pushtime = effective_check_time - countdown_delta
     check.pushtime = pushtime
-    logger.info(f"计算得到的推送时间为：{pushtime}")
     return pushtime
 
 

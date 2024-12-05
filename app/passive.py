@@ -153,7 +153,6 @@ def build_job_with_checks(db, job, checks, current_time):
                 push_time = calculate_pushtime(check_obj)
                 db.commit()
 
-                logger.info(f"检查项 {check_obj.id} 计算 pushtime：{push_time}")
 
             if push_time <= current_time:
                 # 计算倒计时

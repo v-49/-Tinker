@@ -12,4 +12,4 @@ venv/
 
 # 忽略 Python 编译生成的字节码文件
 __pycache__/
-*.pyc
+/app/*.pyc
